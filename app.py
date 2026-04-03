@@ -1,132 +1,126 @@
 import numpy as np
-import gradio as gr
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+
+st.set_page_config(page_title="Multi-Subject Student Analyzer", layout="centered")
+
+st.title("🎓 Multi-Subject Student Analyzer")
+
+# -------------------------------
+# Generate Students
+# -------------------------------
+st.header("🎲 Generate Student Data")
+
+n = st.number_input("Number of Students", min_value=1, value=10)
+
+if st.button("Generate Students"):
+    names = np.array([f"Student {i+1}" for i in range(int(n))])
+    scores = np.random.randint(0, 101, size=(int(n), 3))
+
+    df = pd.DataFrame(scores, columns=["Math", "Science", "English"])
+    df.insert(0, "Student", names)
+
+    st.session_state["data"] = df
+
+# Display Data
+if "data" in st.session_state:
+    st.subheader("📋 Student Scores")
+    st.dataframe(st.session_state["data"], use_container_width=True)
 
 
-def generate_students(n):
-    n = int(n)
+# -------------------------------
+# Student Summary
+# -------------------------------
+st.header("📊 Student Totals & Averages")
 
-    names = np.array([f"Student {i+1}" for i in range(n)])
-    scores = np.random.randint(0, 101, size=(n, 3))
+if st.button("Compute Student Summary"):
+    if "data" not in st.session_state:
+        st.error("Generate data first!")
+    else:
+        df = st.session_state["data"]
 
-    table = np.column_stack((names, scores))
+        df["Total"] = df[["Math", "Science", "English"]].sum(axis=1)
+        df["Average"] = df[["Math", "Science", "English"]].mean(axis=1)
 
-    return table, table
+        st.dataframe(df[["Student", "Total", "Average"]])
 
-
-def student_summary(data):
-    data = np.array(data)
-
-    names = data[:, 0]
-    scores = data[:, 1:].astype(float)
-
-    total = np.sum(scores, axis=1)
-    avg = np.mean(scores, axis=1)
-
-    summary_table = np.column_stack((names, total, avg))
-
-    return summary_table
-
-
-def subject_averages(data):
-    data = np.array(data)
-
-    scores = data[:, 1:].astype(float)
-
-    subject_names = np.array(["Math", "Science", "English"])
-    averages = np.mean(scores, axis=0)
-
-    return np.column_stack((subject_names, averages))
+        # 📊 Bar Chart - Total Scores
+        st.subheader("📊 Total Scores per Student")
+        plt.figure()
+        plt.bar(df["Student"], df["Total"])
+        plt.xticks(rotation=45)
+        st.pyplot(plt)
 
 
-def rank_students(data):
-    data = np.array(data)
+# -------------------------------
+# Subject Averages
+# -------------------------------
+st.header("📈 Subject Averages")
 
-    names = data[:, 0]
-    scores = data[:, 1:].astype(float)
+if st.button("Compute Subject Averages"):
+    if "data" not in st.session_state:
+        st.error("Generate data first!")
+    else:
+        df = st.session_state["data"]
 
-    totals = np.sum(scores, axis=1)
-    sorted_idx = np.argsort(totals)[::-1]
+        averages = df[["Math", "Science", "English"]].mean()
 
-    ranked_names = names[sorted_idx]
-    ranked_totals = totals[sorted_idx]
+        st.write(averages)
 
-    ranks = np.arange(1, len(names) + 1)
-
-    return np.column_stack((ranks, ranked_names, ranked_totals))
-
-
-def filter_above_average(data, threshold):
-    data = np.array(data)
-
-    names = data[:, 0]
-    scores = data[:, 1:].astype(float)
-    threshold = float(threshold)
-
-    avg = np.mean(scores, axis=1)
-
-    mask = avg > threshold
-
-    return np.column_stack((names[mask], avg[mask]))
+        # 📊 Bar Chart - Subject Averages
+        st.subheader("📊 Average Score per Subject")
+        plt.figure()
+        plt.bar(averages.index, averages.values)
+        st.pyplot(plt)
 
 
-with gr.Blocks(title="Multi-Subject Student Analyzer") as demo:
+# -------------------------------
+# Rankings
+# -------------------------------
+st.header("🏆 Rankings")
 
-    gr.Markdown("# 🎓 Multi-Subject Student Analyzer")
+if st.button("Rank Students"):
+    if "data" not in st.session_state:
+        st.error("Generate data first!")
+    else:
+        df = st.session_state["data"].copy()
 
-    data_state = gr.State()
+        df["Total"] = df[["Math", "Science", "English"]].sum(axis=1)
+        df = df.sort_values(by="Total", ascending=False)
+        df["Rank"] = np.arange(1, len(df) + 1)
 
-    with gr.Row():
-        count_input = gr.Number(value=10, label="Number of Students")
-        generate_btn = gr.Button("Generate Students", variant="primary")
+        st.dataframe(df[["Rank", "Student", "Total"]])
 
-    students_table = gr.Dataframe(
-        headers=["Student", "Math", "Science", "English"],
-        interactive=False
-    )
+        # 📊 Top Students Chart
+        st.subheader("🏆 Top Performers")
+        plt.figure()
+        plt.bar(df["Student"], df["Total"])
+        plt.xticks(rotation=45)
+        st.pyplot(plt)
 
-    generate_btn.click(
-        generate_students,
-        inputs=count_input,
-        outputs=[data_state, students_table]
-    )
 
-    gr.Markdown("---")
+# -------------------------------
+# Filter Above Average
+# -------------------------------
+st.header("🔍 Filter by Average")
 
-    with gr.Tab("📊 Student Totals & Averages"):
-        summary_btn = gr.Button("Compute Student Summary", variant="primary")
-        summary_output = gr.Dataframe(
-            headers=["Student", "Total", "Average"],
-            interactive=False
-        )
-        summary_btn.click(student_summary, inputs=data_state, outputs=summary_output)
+threshold = st.number_input("Average Threshold", value=70)
 
-    with gr.Tab("📈 Subject Averages"):
-        subject_btn = gr.Button("Compute Subject Averages", variant="primary")
-        subject_output = gr.Dataframe(
-            headers=["Subject", "Class Average"],
-            interactive=False
-        )
-        subject_btn.click(subject_averages, inputs=data_state, outputs=subject_output)
+if st.button("Filter Students"):
+    if "data" not in st.session_state:
+        st.error("Generate data first!")
+    else:
+        df = st.session_state["data"]
 
-    with gr.Tab("🏆 Rankings"):
-        rank_btn = gr.Button("Rank Students", variant="primary")
-        rank_output = gr.Dataframe(
-            headers=["Rank", "Student", "Total"],
-            interactive=False
-        )
-        rank_btn.click(rank_students, inputs=data_state, outputs=rank_output)
+        df["Average"] = df[["Math", "Science", "English"]].mean(axis=1)
+        filtered = df[df["Average"] > threshold]
 
-    with gr.Tab("🔍 Filter by Average"):
-        threshold_input = gr.Number(value=70, label="Average Threshold")
-        filter_btn = gr.Button("Filter Students", variant="primary")
-        filter_output = gr.Dataframe(
-            headers=["Student", "Average"],
-            interactive=False
-        )
-        filter_btn.click(
-            filter_above_average,
-            inputs=[data_state, threshold_input],
-            outputs=filter_output
-        )
+        st.dataframe(filtered[["Student", "Average"]])
 
-demo.launch(theme=gr.themes.Soft())
+        if not filtered.empty:
+            st.subheader("📊 Filtered Students Chart")
+            plt.figure()
+            plt.bar(filtered["Student"], filtered["Average"])
+            plt.xticks(rotation=45)
+            st.pyplot(plt)
